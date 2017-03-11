@@ -10,9 +10,8 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Bob Lail"]
   spec.email         = ["bob.lailfamily@gmail.com"]
 
-  spec.summary       = "TODO: Write a short summary, because Rubygems requires one."
-  spec.description   = "TODO: Write a longer description or delete this line."
-  spec.homepage      = "TODO: Put your gem's website or public repo URL here."
+  spec.summary       = "Allows you to sync to-do lists with Todoist"
+  spec.homepage      = "https://github.com/houston/houston-todolists"
 
   spec.files         = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
   spec.require_paths = ["lib"]

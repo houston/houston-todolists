@@ -1,6 +1,6 @@
 # Houston::Todolists
 
-TODO: Summary of Houston Todolists.
+Allows you to sync to-do lists with Todoist.
 
 
 ## Installation
