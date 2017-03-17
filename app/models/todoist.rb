@@ -81,6 +81,9 @@ class Todoist < Authorization
       list_map = Hash[todolists.pluck(:remote_id, :id)]
       user_map = Hash[User.with_prop(USER_ID).pluck("props->>'#{USER_ID}'", :id)]
 
+      # Ignore items that don't belong to projects for now.
+      items.reject! { |item| item["project_id"].zero? }
+
       todolist_items.sync(items.map do |item|
         { remote_id: item["id"].to_s,
           summary: item["content"],
