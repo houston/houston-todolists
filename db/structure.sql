@@ -30,6 +30,35 @@ COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
 
 SET search_path = public, pg_catalog;
 
+--
+-- Name: cache_items_count_on_todo_list(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION cache_items_count_on_todo_list() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP IN ('DELETE', 'UPDATE') THEN
+    UPDATE todo_lists SET
+      items_count=(SELECT COUNT(*) FROM todo_list_items WHERE todo_list_items.todolist_id=todo_lists.id),
+      completed_items_count=(SELECT COUNT(*) FROM todo_list_items WHERE todo_list_items.todolist_id=todo_lists.id AND todo_list_items.completed_at IS NOT NULL)
+    WHERE id=OLD.todolist_id;
+  END IF;
+
+  IF TG_OP IN ('UPDATE', 'INSERT') THEN
+    UPDATE todo_lists SET
+      items_count=(SELECT COUNT(*) FROM todo_list_items WHERE todo_list_items.todolist_id=todo_lists.id),
+      completed_items_count=(SELECT COUNT(*) FROM todo_list_items WHERE todo_list_items.todolist_id=todo_lists.id AND todo_list_items.completed_at IS NOT NULL)
+    WHERE id=NEW.todolist_id;
+
+    RETURN NEW;
+  ELSE
+    RETURN OLD;
+  END IF;
+END;
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_with_oids = false;
@@ -442,6 +471,83 @@ ALTER SEQUENCE teams_users_id_seq OWNED BY teams_users.id;
 
 
 --
+-- Name: todo_list_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE todo_list_items (
+    id integer NOT NULL,
+    authorization_id integer,
+    todolist_id integer,
+    created_by_id integer,
+    assigned_to_id integer,
+    remote_id character varying NOT NULL,
+    summary character varying NOT NULL,
+    props jsonb DEFAULT '{}'::jsonb NOT NULL,
+    destroyed_at timestamp without time zone,
+    completed_at timestamp without time zone,
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: todo_list_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE todo_list_items_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: todo_list_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE todo_list_items_id_seq OWNED BY todo_list_items.id;
+
+
+--
+-- Name: todo_lists; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE todo_lists (
+    id integer NOT NULL,
+    authorization_id integer,
+    remote_id character varying NOT NULL,
+    name character varying NOT NULL,
+    sequence integer DEFAULT 0 NOT NULL,
+    props jsonb DEFAULT '{}'::jsonb NOT NULL,
+    destroyed_at timestamp without time zone,
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL,
+    items_count integer DEFAULT 0 NOT NULL,
+    completed_items_count integer DEFAULT 0 NOT NULL
+);
+
+
+--
+-- Name: todo_lists_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE todo_lists_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: todo_lists_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE todo_lists_id_seq OWNED BY todo_lists.id;
+
+
+--
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -615,6 +721,20 @@ ALTER TABLE ONLY teams_users ALTER COLUMN id SET DEFAULT nextval('teams_users_id
 
 
 --
+-- Name: todo_list_items id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY todo_list_items ALTER COLUMN id SET DEFAULT nextval('todo_list_items_id_seq'::regclass);
+
+
+--
+-- Name: todo_lists id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY todo_lists ALTER COLUMN id SET DEFAULT nextval('todo_lists_id_seq'::regclass);
+
+
+--
 -- Name: users id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -733,6 +853,22 @@ ALTER TABLE ONLY teams_users
 
 
 --
+-- Name: todo_list_items todo_list_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY todo_list_items
+    ADD CONSTRAINT todo_list_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: todo_lists todo_lists_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY todo_lists
+    ADD CONSTRAINT todo_lists_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -847,6 +983,55 @@ CREATE UNIQUE INDEX index_teams_users_on_team_id_and_user_id ON teams_users USIN
 
 
 --
+-- Name: index_todo_list_items_on_assigned_to_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_todo_list_items_on_assigned_to_id ON todo_list_items USING btree (assigned_to_id);
+
+
+--
+-- Name: index_todo_list_items_on_authorization_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_todo_list_items_on_authorization_id ON todo_list_items USING btree (authorization_id);
+
+
+--
+-- Name: index_todo_list_items_on_created_by_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_todo_list_items_on_created_by_id ON todo_list_items USING btree (created_by_id);
+
+
+--
+-- Name: index_todo_list_items_on_remote_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_todo_list_items_on_remote_id ON todo_list_items USING btree (remote_id);
+
+
+--
+-- Name: index_todo_list_items_on_todolist_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_todo_list_items_on_todolist_id ON todo_list_items USING btree (todolist_id);
+
+
+--
+-- Name: index_todo_lists_on_authorization_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_todo_lists_on_authorization_id ON todo_lists USING btree (authorization_id);
+
+
+--
+-- Name: index_todo_lists_on_remote_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_todo_lists_on_remote_id ON todo_lists USING btree (remote_id);
+
+
+--
 -- Name: index_users_on_authentication_token; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -931,11 +1116,50 @@ CREATE INDEX index_versions_on_versioned_id_and_versioned_type ON versions USING
 
 
 --
+-- Name: todo_list_items cache_items_count_on_todo_list_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER cache_items_count_on_todo_list_trigger AFTER INSERT OR DELETE OR UPDATE ON todo_list_items FOR EACH ROW EXECUTE PROCEDURE cache_items_count_on_todo_list();
+
+
+--
+-- Name: todo_list_items fk_rails_0e0067e526; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY todo_list_items
+    ADD CONSTRAINT fk_rails_0e0067e526 FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: todo_list_items fk_rails_2e5e833107; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY todo_list_items
+    ADD CONSTRAINT fk_rails_2e5e833107 FOREIGN KEY (todolist_id) REFERENCES todo_lists(id) ON DELETE CASCADE;
+
+
+--
 -- Name: follows fk_rails_32479bd030; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY follows
     ADD CONSTRAINT fk_rails_32479bd030 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: todo_list_items fk_rails_3497ac4841; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY todo_list_items
+    ADD CONSTRAINT fk_rails_3497ac4841 FOREIGN KEY (assigned_to_id) REFERENCES users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: todo_list_items fk_rails_499b6292a6; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY todo_list_items
+    ADD CONSTRAINT fk_rails_499b6292a6 FOREIGN KEY (authorization_id) REFERENCES authorizations(id) ON DELETE SET NULL;
 
 
 --
@@ -952,6 +1176,14 @@ ALTER TABLE ONLY authorizations
 
 ALTER TABLE ONLY follows
     ADD CONSTRAINT fk_rails_572bf69092 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: todo_lists fk_rails_ee7a587d4b; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY todo_lists
+    ADD CONSTRAINT fk_rails_ee7a587d4b FOREIGN KEY (authorization_id) REFERENCES authorizations(id) ON DELETE SET NULL;
 
 
 --
@@ -1064,6 +1296,8 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20170301014051'),
 ('20170307032041'),
 ('20170307035755'),
-('20170310024505');
+('20170310024505'),
+('20170311033629'),
+('20170314230755');
 
 

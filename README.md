@@ -1,4 +1,4 @@
-# Houston::Todolists
+# Houston::TodoLists
 
 Allows you to sync to-do lists with Todoist.
 
@@ -13,7 +13,7 @@ And in `config/main.rb`, add:
 
 ```ruby
 use :todolists do
-  # TODO: specify configuration options for Houston::Todolists here
+  # TODO: specify configuration options for Houston::TodoLists here
 end
 ```
 

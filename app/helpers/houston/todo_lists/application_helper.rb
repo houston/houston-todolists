@@ -1,4 +1,4 @@
-module Houston::Todolists
+module Houston::TodoLists
   module ApplicationHelper
   end
 end

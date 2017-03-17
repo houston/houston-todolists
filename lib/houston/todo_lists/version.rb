@@ -1,5 +1,5 @@
 module Houston
-  module Todolists
+  module TodoLists
     VERSION = "0.0.1"
   end
 end

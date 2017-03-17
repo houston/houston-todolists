@@ -1,9 +1,9 @@
-require "houston/todolists/railtie"
+require "houston/todo_lists/railtie"
 
 module Houston
-  module Todolists
+  module TodoLists
     class Engine < ::Rails::Engine
-      isolate_namespace Houston::Todolists
+      isolate_namespace Houston::TodoLists
 
       # Precompile this modules assets
       initializer :assets do |config|

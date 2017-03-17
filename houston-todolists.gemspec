@@ -1,12 +1,12 @@
 $:.push File.expand_path("../lib", __FILE__)
 
 # Maintain your gem's version:
-require "houston/todolists/version"
+require "houston/todo_lists/version"
 
 # Describe your gem and declare its dependencies:
 Gem::Specification.new do |spec|
   spec.name          = "houston-todolists"
-  spec.version       = Houston::Todolists::VERSION
+  spec.version       = Houston::TodoLists::VERSION
   spec.authors       = ["Bob Lail"]
   spec.email         = ["bob.lailfamily@gmail.com"]
 
