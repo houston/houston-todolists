@@ -5,6 +5,12 @@ class Todoist < Authorization
 
 
 
+  def resync!
+    update_prop! "todoist.syncToken", "*"
+    update_prop! "todoist.since", nil
+    sync!
+  end
+
   def self.sync!
     all.each(&:sync!)
   end
