@@ -486,7 +486,11 @@ CREATE TABLE todo_list_items (
     destroyed_at timestamp without time zone,
     completed_at timestamp without time zone,
     created_at timestamp without time zone NOT NULL,
-    updated_at timestamp without time zone NOT NULL
+    updated_at timestamp without time zone NOT NULL,
+    completed_by_id integer,
+    created_by_email character varying,
+    assigned_to_email character varying,
+    completed_by_email character varying
 );
 
 
@@ -997,6 +1001,13 @@ CREATE INDEX index_todo_list_items_on_authorization_id ON todo_list_items USING 
 
 
 --
+-- Name: index_todo_list_items_on_completed_by_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_todo_list_items_on_completed_by_id ON todo_list_items USING btree (completed_by_id);
+
+
+--
 -- Name: index_todo_list_items_on_created_by_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1179,6 +1190,14 @@ ALTER TABLE ONLY follows
 
 
 --
+-- Name: todo_list_items fk_rails_6ac4575b32; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY todo_list_items
+    ADD CONSTRAINT fk_rails_6ac4575b32 FOREIGN KEY (completed_by_id) REFERENCES users(id) ON DELETE SET NULL;
+
+
+--
 -- Name: todo_lists fk_rails_ee7a587d4b; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1298,6 +1317,7 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20170307035755'),
 ('20170310024505'),
 ('20170311033629'),
-('20170314230755');
+('20170314230755'),
+('20170320002452');
 
 

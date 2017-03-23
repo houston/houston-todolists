@@ -1,108 +1,110 @@
 class Todoist < Authorization
+
   has_many :todolists, class_name: "TodoList", inverse_of: :authorization, foreign_key: "authorization_id"
   has_many :todolist_items, class_name: "TodoListItem", inverse_of: :authorization, foreign_key: "authorization_id"
+
+
 
   def self.sync!
     all.each(&:sync!)
   end
 
   def sync!
-    response = connection.post("sync",
-      token: access_token,
-      sync_token: sync_token,
-      resource_types: MultiJson.dump(%w{projects items collaborators}))
-    data = MultiJson.load(response.body)
+    Houston.benchmark "[todoist] sync" do
+      data = sync
 
-    completed_items = []
-    completed_projects = []
-    if data["full_sync"]
-      Houston.benchmark "[todoist] Fetching completed items" do
-        offset = 0
-        limit = 50
-        requests = 0
-        params = { token: access_token, limit: limit }
-        last_completed = todolist_items.completed.order(completed_at: :desc).first
-        params[:since] = last_completed.completed_at if last_completed
-        loop do
-          response = connection.post("completed/get_all", params.merge(offset: offset))
-          data2 = MultiJson.load(response.body)
-          requests += 1
-          offset += limit
-          completed_items.concat data2["items"]
-          completed_projects.concat data2["projects"].values
-          break if data2["items"].length < limit
+
+      projects = data.fetch "projects"
+      items = data.fetch "items"
+      email_by_user_id = Hash[data.fetch("collaborators").map { |user| user.values_at("id", "email") }]
+      projects_by_id = projects.index_by { |project| project["id"] }
+      items_by_id = items.index_by { |item| item["id"] }
+      items_by_id.default_proc = proc do |index, id|
+        item_data = get_item(id)
+        next unless item_data
+        index[id] = item_data.fetch("item").tap do
+          project = item_data.fetch("project")
+          project_id = project.fetch("id")
+          projects_by_id[project_id] = project unless projects_by_id.key?(project_id)
         end
-
-        Rails.logger.info "[todoist] #{requests} requests"
       end
-    end
 
-    collaborators = data.fetch "collaborators"
-    projects = data.fetch "projects"
-    items = data.fetch "items"
 
-    items_by_id = items.index_by { |item| item["id"] }
-    completed_items.each do |completed_item|
-      item = items_by_id[completed_item["id"]]
-      if item
-        item["completed_date"] = completed_item["completed_date"]
-      else
-        items_by_id[completed_item["id"]] = completed_item
-      end
-    end
-    items = items_by_id.values
+      max_completed_at = nil
+      recently_completed_items.each do |completed_item|
+        id = completed_item.fetch("object_id")
+        initiator_id = completed_item.fetch("initiator_id")
+        completed_at = Time.parse(completed_item["event_date"])
+        max_completed_at = completed_at unless max_completed_at && max_completed_at > completed_at
+        email = email_by_user_id.fetch(initiator_id, nil)
 
-    projects_by_id = projects.index_by { |project| project["id"] }
-    completed_projects.each do |completed_project|
-      unless projects_by_id.key?(completed_project["id"])
-        projects_by_id[completed_project["id"]] = completed_project
-      end
-    end
-    projects = projects_by_id.values
-
-    transaction do
-      update_prop! SYNC_TOKEN, data["sync_token"]
-
-      collaborators.each do |collaborator|
-        user = User.find_by_email_address collaborator["email"]
-        if user
-          user.update_prop! USER_ID, collaborator["id"]
+        item = items_by_id[id]
+        if item && item["checked"] == 1
+          item["completed_at"] = completed_at
+          item["completed_by_email"] = email
         else
-          Rails.logger.info "[todoist.sync!] Found no user with email address #{collaborator["email"]}"
+          Rails.logger.debug "[todoist] item #{id} was completed by #{initiator_id} (#{email}) at #{completed_at} but isn't visible to #{user.name}"
         end
       end
+      items = items_by_id.values
+      projects = projects_by_id.values
 
-      todolists.sync(projects.map { |project|
-        { remote_id: project["id"].to_s,
-          name: project["name"],
-          destroyed: project["is_deleted"] == 1 || project["is_archived"] == 1 } })
-          # props: { color: TODOIST_COLORS[project["color"]] } })
 
-      list_map = Hash[todolists.pluck(:remote_id, :id)]
-      user_map = Hash[User.with_prop(USER_ID).pluck("props->>'#{USER_ID}'", :id)]
+      transaction do
+        update_prop! SYNC_TOKEN, data["sync_token"]
+        update_prop! SYNC_SINCE, max_completed_at if max_completed_at
 
-      # Ignore items that don't belong to projects for now.
-      items.reject! { |item| item["project_id"].zero? }
 
-      todolist_items.sync(items.map do |item|
-        { remote_id: item["id"].to_s,
-          summary: item["content"],
-          todolist_id: list_map.fetch(item["project_id"].to_s),
-          created_by_id: user_map[item["user_id"]],
-          assigned_to_id: user_map[item["responsible_uid"]],
-          destroyed: item["is_deleted"] == 1 || item["is_archived"] == 1 }.tap do |attrs|
-          if item.key?("completed_date")
-            attrs[:completed_at] = Time.parse(item["completed_date"])
-          end
-          if item.key?("date_added")
-            attrs[:created_at] = Time.parse(item["date_added"])
-          end
+        todolists.sync(projects.map do |project|
+          expected = { remote_id: project["id"].to_s }
+
+          # When Todoist returns a project or item that's deleted,
+          # several of the value are erased. We don't want to overwrite
+          # those.
+          next expected.merge(destroyed: true) if project["is_deleted"] == 1 || project["is_archived"] == 1
+
+          expected.merge(name: project["name"])
+        end)
+        list_map = Hash[todolists.with_destroyed.pluck(:remote_id, :id)]
+
+
+        items = items.find_all do |item|
+          next true if list_map.key? item["project_id"].to_s
+          Rails.logger.debug "[todoist] item #{item["id"]} won't be synced because its project #{item["project_id"]} hasn't been synced"
+          false
         end
-      end)
+
+
+        todolist_items.sync(items.map do |item|
+          expected = { remote_id: item["id"].to_s }
+
+          # When Todoist returns a project or item that's deleted,
+          # several of the value are erased. We don't want to overwrite
+          # those.
+          next expected.merge(destroyed: true) if item["is_deleted"] == 1 || item["is_archived"] == 1
+
+          if item["checked"] == 1 && !item["completed_at"]
+            Rails.logger.debug "[todoist] item #{item["id"]} was completed, but the activity log didn't have a record of that"
+            item["completed_at"] = Time.now
+          end
+
+          expected.merge(
+            destroyed: false,
+            summary: item["content"],
+            todolist_id: list_map.fetch(item["project_id"].to_s),
+            created_at: Time.parse(item["date_added"]),
+            created_by_email: email_by_user_id[item["user_id"]],
+            assigned_to_email: email_by_user_id[item["responsible_uid"]],
+            completed_at: item["completed_at"],
+            completed_by_email: item["completed_by_email"])
+        end)
+      end
     end
 
     self
   end
+
+
 
   def synced?
     sync_token != FULL_SYNC
@@ -118,32 +120,56 @@ class Todoist < Authorization
     end
   end
 
+
+
   SYNC_TOKEN = "todoist.syncToken".freeze
+  SYNC_SINCE = "todoist.since".freeze
   FULL_SYNC = "*".freeze
-  USER_ID = "todoist.userID".freeze
-  # TODOIST_COLORS = [
-  #   "rgb(149, 239, 99)",
-  #   "rgb(255, 133, 129)",
-  #   "rgb(255, 196, 113)",
-  #   "rgb(249, 236, 117)",
-  #   "rgb(168, 200, 228)",
-  #   "rgb(210, 184, 163)",
-  #   "rgb(226, 168, 228)",
-  #   "rgb(204, 204, 204)",
-  #   "rgb(251, 136, 110)",
-  #   "rgb(255, 204, 0)",
-  #   "rgb(116, 232, 211)",
-  #   "rgb(59, 213, 251)",
-  #   "rgb(220, 79, 173)",
-  #   "rgb(172, 25, 61)",
-  #   "rgb(210, 71, 38)",
-  #   "rgb(130, 186, 0)",
-  #   "rgb(3, 179, 178)",
-  #   "rgb(0, 130, 153)",
-  #   "rgb(93, 178, 255)",
-  #   "rgb(0, 114, 198)",
-  #   "rgb(0, 0, 0)",
-  #   "rgb(119, 119, 119)"
-  # ].freeze
+
+private
+
+  def sync
+    Houston.benchmark "[todoist] POST /sync" do
+      response = connection.post("sync",
+        token: access_token,
+        sync_token: sync_token,
+        resource_types: MultiJson.dump(%w{projects items collaborators}))
+      MultiJson.load(response.body)
+    end
+  end
+
+  def recently_completed_items
+    completed_since props[SYNC_SINCE]
+  end
+
+  def completed_since(timestamp)
+    all_events = []
+    Houston.benchmark "[todoist] POST /activity/get" do
+      offset = 0
+      limit = 100
+      params = { object_event_types: '["item:completed"]', token: access_token, limit: limit }
+      params[:since] = timestamp if timestamp
+      loop do
+        response = connection.post("activity/get", params.merge(offset: offset))
+        events = MultiJson.load(response.body)
+        offset += limit
+        all_events.concat events
+        break if events.length < limit
+      end
+      Rails.logger.info "\e[33m[todoist] \e[1m#{(offset / limit) + 1}\e[0;33m requests\e[0m"
+    end
+    all_events
+  end
+
+  def get_item(id)
+    Houston.benchmark "[todoist] POST /items/get #{id}" do
+      begin
+        response = connection.post("items/get", token: access_token, item_id: id)
+        MultiJson.load(response.body)
+      rescue Faraday::ResourceNotFound
+        nil
+      end
+    end
+  end
 
 end
