@@ -61,9 +61,11 @@ class Todoist < Authorization
           # When Todoist returns a project or item that's deleted,
           # several of the value are erased. We don't want to overwrite
           # those.
-          next expected.merge(destroyed: true) if project["is_deleted"] == 1 || project["is_archived"] == 1
+          next expected.merge(destroyed: true) if project["is_deleted"] == 1
 
-          expected.merge(name: project["name"])
+          expected.merge(
+            name: project["name"],
+            archived: project["is_archived"] == 1)
         end)
         list_map = Hash[todolists.with_destroyed.pluck(:remote_id, :id)]
 
@@ -81,6 +83,8 @@ class Todoist < Authorization
           # When Todoist returns a project or item that's deleted,
           # several of the value are erased. We don't want to overwrite
           # those.
+          #
+          # Don't differentiate between archived items and deleted items.
           next expected.merge(destroyed: true) if item["is_deleted"] == 1 || item["is_archived"] == 1
 
           if item["checked"] == 1 && !item["completed_at"]
