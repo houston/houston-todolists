@@ -5,7 +5,7 @@ class TodoList < ActiveRecord::Base
 
   belongs_to :authorization
   has_and_belongs_to_many :goals
-  has_many :items, class_name: "TodoListItem"
+  has_many :items, class_name: "TodoListItem", foreign_key: "todolist_id"
 
   validates :name, :authorization_id, :remote_id, presence: true
 
