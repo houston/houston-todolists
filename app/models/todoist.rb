@@ -138,7 +138,7 @@ class Todoist < Authorization
 
 private
 
-  def sync
+  def sync(sync_token: self.sync_token)
     Houston.benchmark "[todoist] POST /sync" do
       response = connection.post("sync",
         token: access_token,
