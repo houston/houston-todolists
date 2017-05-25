@@ -76,6 +76,12 @@ class Todoist < Authorization
         list_map = Hash[todolists.with_destroyed.pluck(:remote_id, :id)]
 
 
+        remote_ids_to_delete = items
+          .find_all { |item| item["is_deleted"] == 1 || item["is_archived"] == 1 }
+          .map { |item| item["id"].to_s }
+        todolist_items.where(remote_id: remote_ids_to_delete).update_all(destroyed_at: Time.now)
+
+
         items = items.find_all do |item|
           next true if list_map.key? item["project_id"].to_s
           Rails.logger.debug "[todoist] item #{item["id"]} won't be synced because its project #{item["project_id"]} hasn't been synced"
@@ -91,7 +97,10 @@ class Todoist < Authorization
           # those.
           #
           # Don't differentiate between archived items and deleted items.
-          next expected.merge(destroyed: true) if item["is_deleted"] == 1 || item["is_archived"] == 1
+          if item["is_deleted"] == 1 || item["is_archived"] == 1
+            Rails.logger.debug "[todoist] item #{item["id"]} will be destroyed"
+            next expected.merge(destroyed: true)
+          end
 
           if item["checked"] == 1 && !item["completed_at"]
             Rails.logger.debug "[todoist] item #{item["id"]} was completed, but the activity log didn't have a record of that"
