@@ -151,43 +151,6 @@ ALTER SEQUENCE authorizations_id_seq OWNED BY authorizations.id;
 
 
 --
--- Name: consumer_tokens; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE consumer_tokens (
-    id integer NOT NULL,
-    user_id integer,
-    type character varying(30),
-    token character varying(1024),
-    refresh_token character varying,
-    secret character varying,
-    expires_at integer,
-    expires_in character varying,
-    created_at timestamp without time zone,
-    updated_at timestamp without time zone
-);
-
-
---
--- Name: consumer_tokens_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE consumer_tokens_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: consumer_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE consumer_tokens_id_seq OWNED BY consumer_tokens.id;
-
-
---
 -- Name: errors; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -663,13 +626,6 @@ ALTER TABLE ONLY authorizations ALTER COLUMN id SET DEFAULT nextval('authorizati
 
 
 --
--- Name: consumer_tokens id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY consumer_tokens ALTER COLUMN id SET DEFAULT nextval('consumer_tokens_id_seq'::regclass);
-
-
---
 -- Name: errors id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -775,14 +731,6 @@ ALTER TABLE ONLY ar_internal_metadata
 
 ALTER TABLE ONLY authorizations
     ADD CONSTRAINT authorizations_pkey PRIMARY KEY (id);
-
-
---
--- Name: consumer_tokens consumer_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY consumer_tokens
-    ADD CONSTRAINT consumer_tokens_pkey PRIMARY KEY (id);
 
 
 --
@@ -901,13 +849,6 @@ CREATE INDEX index_actions_on_name ON actions USING btree (name);
 --
 
 CREATE INDEX index_authorizations_on_user_id ON authorizations USING btree (user_id);
-
-
---
--- Name: index_consumer_tokens_on_token; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_consumer_tokens_on_token ON consumer_tokens USING btree (token);
 
 
 --
@@ -1321,6 +1262,7 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20170314230755'),
 ('20170320002452'),
 ('20170323013622'),
-('20170323034420');
+('20170323034420'),
+('20170329030329');
 
 
