@@ -44,4 +44,8 @@ class TodoList < ActiveRecord::Base
     self.destroyed_at = value ? Time.now : nil
   end
 
+  def completed?
+    items_count > 0 && items_count == completed_items_count
+  end
+
 end
